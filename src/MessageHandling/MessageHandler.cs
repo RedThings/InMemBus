@@ -1,4 +1,5 @@
-﻿using InMemBus.Saga;
+﻿using InMemBus.MemoryBus;
+using InMemBus.Saga;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -12,7 +13,7 @@ public class MessageHandler<TMessage>(
     IInMemBus inMemBus)
     where TMessage : class
 {
-    public async Task HandleAsync(IServiceProvider currentScopeServiceProvider, TMessage message, CancellationToken cancellationToken)
+    public async Task HandleAsync(IServiceProvider currentScopeServiceProvider, Message message, CancellationToken cancellationToken)
     {
         var messageType = typeof(TMessage);
         var sagaConfigurations = sagasConfiguration.GetSagaConfigurations<TMessage>();
@@ -25,7 +26,7 @@ public class MessageHandler<TMessage>(
 
             if (step.IsStarting)
             {
-                var sagaCreationResult = sagaManager.TryCreateNewSaga<TMessage>(currentScopeServiceProvider, message, step);
+                var sagaCreationResult = sagaManager.TryCreateNewSaga<TMessage>(currentScopeServiceProvider, message.Payload, step);
                 sagaAvailableOrCanSkipOverRequeue = sagaCreationResult.Success;
 
                 if (!sagaAvailableOrCanSkipOverRequeue)
@@ -35,14 +36,14 @@ public class MessageHandler<TMessage>(
 
                 sagaTaskFuncs.Add(async () =>
                 {
-                    await sagaCreationResult.Saga.HandleStartAsync(message, cancellationToken).ConfigureAwait(false);
+                    await sagaCreationResult.Saga.HandleStartAsync((TMessage) message.Payload, cancellationToken).ConfigureAwait(false);
 
                     sagaCreationResult.ProcessSuccessfullyHandledMessage();
                 });
             }
             else
             {
-                var sagaAccessResult = sagaManager.TryGetSagaForStep<TMessage>(message, step);
+                var sagaAccessResult = sagaManager.TryGetSagaForStep<TMessage>(message.Payload, step);
                 sagaAvailableOrCanSkipOverRequeue = sagaAccessResult.Success;
 
                 if (!sagaAvailableOrCanSkipOverRequeue)
@@ -52,7 +53,7 @@ public class MessageHandler<TMessage>(
 
                 sagaTaskFuncs.Add(async () =>
                 {
-                    await sagaAccessResult.SagaStep.HandleStepAsync(message, cancellationToken).ConfigureAwait(false);
+                    await sagaAccessResult.SagaStep.HandleStepAsync((TMessage) message.Payload, cancellationToken).ConfigureAwait(false);
 
                     sagaAccessResult.ProcessSuccessfullyHandledMessage();
                 });
@@ -63,10 +64,10 @@ public class MessageHandler<TMessage>(
         {
             // TODO: poison message handling - for example, if you get the scatter-gather calc wrong, this message will end up being replayed endlessly
             logger.LogInformation("Message {type} is being handled, but the handling of the message has resulted in an unavailable saga - no handling will "
-                                  + "take place and the message will be put to the head of the queue.", messageType);
+                                  + "take place and the message will be requeued.", messageType);
 
             sagaTaskFuncs.Clear();
-            inMemBus.AddToHeadOfQueue(message);
+            inMemBus.Requeue(message);
 
             return;
         }
@@ -83,7 +84,7 @@ public class MessageHandler<TMessage>(
 
         foreach (var inMemBusMessageHandler in plainMessageHandlers)
         {
-            tasks.Add(HandleWithRetriesAsync(messageType, () => inMemBusMessageHandler.HandleAsync(message, cancellationToken)));
+            tasks.Add(HandleWithRetriesAsync(messageType, () => inMemBusMessageHandler.HandleAsync((TMessage) message.Payload, cancellationToken)));
         }
 
         await Task.WhenAll(tasks).ConfigureAwait(false);

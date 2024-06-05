@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using InMemBus.MemoryBus;
 using InMemBus.MessageHandling;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -13,15 +14,19 @@ internal class InMemBusObserver(IServiceProvider rootServiceProvider) : Backgrou
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var logger = rootServiceProvider.GetRequiredService<ILogger<InMemBusObserver>>();
+        var config = rootServiceProvider.GetRequiredService<InMemBusConfiguration>();
         var inMemoryBus = rootServiceProvider.GetRequiredService<IInMemBus>();
+
+        var semaphore = new SemaphoreSlim(config.MaximumHandlingConcurrency);
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            var nextMessages = inMemoryBus.GetNextMessagesToProcess();
+            var maxMessagesToDequeue = semaphore.CurrentCount - 1;
+            var nextMessages = inMemoryBus.GetNextMessagesToProcess(maxMessagesToDequeue);
 
-            foreach (var nextMessage in nextMessages)
+            foreach (var message in nextMessages)
             {
-                _ = HandleMessageAsync(logger, inMemoryBus, nextMessage, cancellationToken);
+                _ = HandleMessageAsync(logger, semaphore, message, cancellationToken);
             }
 
             await Task.Delay(1, cancellationToken).ConfigureAwait(false); // blocks pipeline if not present
@@ -29,14 +34,16 @@ internal class InMemBusObserver(IServiceProvider rootServiceProvider) : Backgrou
     }
 
     private async Task HandleMessageAsync(
-        ILogger<InMemBusObserver> logger, 
-        IInMemBus inMemBus,
-        object message, 
+        ILogger<InMemBusObserver> logger,
+        SemaphoreSlim semaphore,
+        Message message,
         CancellationToken cancellationToken)
     {
         try
         {
-            var messageType = message.GetType();
+            await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+            var messageType = message.Payload.GetType();
             var messageHandlerType = typeof(MessageHandler<>).MakeGenericType(messageType);
 
             await using var scope = rootServiceProvider.CreateAsyncScope();
@@ -49,10 +56,10 @@ internal class InMemBusObserver(IServiceProvider rootServiceProvider) : Backgrou
             {
                 const string methodName = nameof(MessageHandler<object>.HandleAsync);
                 var method = messageHandlerType.GetMethod(methodName) ?? throw new Exception("Method does not exist - shouldn't be possible");
-                
+
                 taskFunc = async (sp, msg, cancel) =>
                 {
-                    if (method.Invoke(messageHandler, new[] { sp, msg, cancel }) is not Task task)
+                    if (method.Invoke(messageHandler, [sp, msg, cancel]) is not Task task)
                     {
                         return;
                     }
@@ -71,7 +78,7 @@ internal class InMemBusObserver(IServiceProvider rootServiceProvider) : Backgrou
         }
         finally
         {
-            inMemBus.ReleaseHandlingSlot(message);
+            semaphore.Release();
         }
     }
 }

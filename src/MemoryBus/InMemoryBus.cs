@@ -1,41 +1,30 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 
 namespace InMemBus.MemoryBus;
 
-internal class InMemoryBus(
-    ILogger<InMemoryBus> logger,
-    InMemBusConfiguration configuration) : IInMemBus
+internal class InMemoryBus(ILogger<InMemoryBus> logger) : IInMemBus
 {
-    private readonly PriorityQueue<object, int> queue = new();
-    private readonly List<object> handlingSlots = [];
+    private readonly ConcurrentQueue<Message> queue = [];
 
     public void Send<TMessage>(TMessage message)
         where TMessage : class
     {
-        queue.Enqueue(message, queue.Count);
+        queue.Enqueue(new Message(message));
     }
 
     public void Publish<TEvent>(TEvent @event)
-        where TEvent : class => 
+        where TEvent : class =>
         Send(@event);
 
-    public IEnumerable<object> GetNextMessagesToProcess()
+    public IReadOnlyCollection<Message> GetNextMessagesToProcess(int maxMessagesToDequeue)
     {
-        var maxConcurrent = configuration.MaximumHandlingConcurrency;
-        var totalInQueue = queue.Count;
-        var availableHandlingSlots = maxConcurrent - handlingSlots.Count;
-        var messagesToGetCount = Math.Min(maxConcurrent, totalInQueue);
+        maxMessagesToDequeue = Math.Min(maxMessagesToDequeue, queue.Count);
+        var messagesToProcess = new List<Message>(maxMessagesToDequeue);
 
-        if (messagesToGetCount > availableHandlingSlots)
+        for (var i = 0; i < maxMessagesToDequeue; i++)
         {
-            messagesToGetCount = availableHandlingSlots;
-        }
-
-        var messagesToProcess = new List<object>(messagesToGetCount);
-
-        for (var i = 0; i < messagesToGetCount; i++)
-        {
-            var ok = queue.TryDequeue(out var message, out _);
+            var ok = queue.TryDequeue(out var message);
 
             if (!ok || message == null)
             {
@@ -43,26 +32,21 @@ internal class InMemoryBus(
             }
 
             messagesToProcess.Add(message);
-            handlingSlots.Add(message);
         }
 
         return messagesToProcess;
     }
 
-    public void AddToHeadOfQueue(object message)
+    public void Requeue(Message message)
     {
-        queue.Enqueue(message, int.MinValue);
-    }
+        message.AddRequeueAttempt();
 
-    public void ReleaseHandlingSlot(object message)
-    {
-        try
+        if (message.RequeueAttempts > 1000) // arbitrary but will do for now
         {
-            handlingSlots.Remove(message);
+            logger.LogError("Message is poison. Will not requeue");
+            return;
         }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Attempt to remove message from handling slot failed");
-        }
+
+        queue.Enqueue(message);
     }
 }
