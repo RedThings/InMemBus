@@ -1,6 +1,6 @@
 ﻿namespace InMemBus.Saga;
 
-public class SagaAccessResult<TMessage>(
+internal class SagaAccessResult<TMessage>(
     bool success, 
     IInMemBusSagaStep<TMessage> sagaStep, 
     Action postSuccess

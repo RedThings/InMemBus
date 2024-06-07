@@ -1,6 +1,6 @@
 ﻿namespace InMemBus.Saga;
 
-public interface ISagaManager
+internal interface ISagaManager
 {
     SagaCreationResult<TStartingMessage> TryCreateNewSaga<TStartingMessage>(IServiceProvider currentScopeServiceProvider, object message, SagaStep step)
         where TStartingMessage : class;

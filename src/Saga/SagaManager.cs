@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace InMemBus.Saga;
 
-public class SagaManager : ISagaManager
+internal class SagaManager : ISagaManager
 {
     private readonly ConcurrentDictionary<Guid, AliveSaga> sagas = [];
 

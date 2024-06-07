@@ -16,6 +16,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(memBusConfiguration);
         services.AddSingleton<IInMemBus, InMemoryBus>();
         services.AddSingleton<ISagaManager, SagaManager>();
-        services.AddHostedService<InMemBusObserver>();
+        services.AddSingleton<InMemBusObserver>();
+        services.AddHostedService<InMemBusBackgroundService>();
     }
 }

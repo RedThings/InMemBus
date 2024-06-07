@@ -1,8 +1,9 @@
 ﻿using System.Linq.Expressions;
 using InMemBus.MessageHandling;
+using InMemBus.Saga;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace InMemBus.Saga;
+namespace InMemBus;
 
 public class InMemBusSagaStepsConfiguration<TStartingMessage, TSaga>(IServiceCollection services)
     where TStartingMessage : class
@@ -40,5 +41,5 @@ public class InMemBusSagaStepsConfiguration<TStartingMessage, TSaga>(IServiceCol
         Guid CastCompiledFinderExpression(object obj) => compiledFinderExpression((TMessage) obj);
     }
 
-    public IReadOnlyCollection<SagaStep> BuildSteps() => steps;
+    internal IReadOnlyCollection<SagaStep> BuildSteps() => steps;
 }

@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace InMemBus.MessageHandling;
 
-public class MessageHandler<TMessage>(
+internal class MessageHandler<TMessage>(
     ILogger<MessageHandler<TMessage>> logger,
     InMemBusConfiguration memBusConfiguration,
     SagasConfiguration sagasConfiguration,

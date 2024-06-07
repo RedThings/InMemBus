@@ -3,7 +3,7 @@ using System.Linq.Expressions;
 
 namespace InMemBus.Saga;
 
-public class SagasConfiguration
+internal class SagasConfiguration
 {
     private readonly List<SagaConfiguration> sagaConfigurations = [];
     private readonly ConcurrentDictionary<Type, IReadOnlyCollection<SagaConfiguration>> cachedConfigurations = [];

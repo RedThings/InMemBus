@@ -1,6 +1,6 @@
 ﻿namespace InMemBus.Saga;
 
-public class SagaConfiguration(
+internal class SagaConfiguration(
     SagaStep startingStep,
     IReadOnlyCollection<SagaStep> otherSteps
 )

@@ -1,17 +1,15 @@
 ﻿using System.Collections.Concurrent;
-using InMemBus.MemoryBus;
 using InMemBus.MessageHandling;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace InMemBus.Hosting;
+namespace InMemBus.MemoryBus;
 
-internal class InMemBusObserver(IServiceProvider rootServiceProvider) : BackgroundService
+internal class InMemBusObserver(IServiceProvider rootServiceProvider)
 {
     private readonly ConcurrentDictionary<Type, Func<IServiceProvider, object, CancellationToken, Task>> messageHandlingTaskFuncs = [];
 
-    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+    public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var logger = rootServiceProvider.GetRequiredService<ILogger<InMemBusObserver>>();
         var config = rootServiceProvider.GetRequiredService<InMemBusConfiguration>();

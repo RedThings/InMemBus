@@ -1,6 +1,6 @@
 ﻿namespace InMemBus.Saga;
 
-public class SagaCreationResult<TStartingMessage>(
+internal class SagaCreationResult<TStartingMessage>(
     bool success, 
     InMemBusSaga<TStartingMessage> saga, 
     Action postSuccess

@@ -1,6 +1,6 @@
 ﻿namespace InMemBus.Saga;
 
-public class AliveSaga(
+internal class AliveSaga(
     object saga,
     Func<bool> getIsComplete)
 {
