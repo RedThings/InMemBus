@@ -7,6 +7,7 @@ public class TestDataAsserter
     public void Add(Guid id) => ids.Add(id);
     public bool Assert(Guid id) => ids.Contains(id);
     public bool AssertMultiple(Guid id, int howMany) => ids.Count(x => x == id) == howMany;
+    public void Remove(Guid id) => ids.Remove(id);
 
     public bool Poll(Func<TestDataAsserter, bool> predicate, int maxSeconds = 10)
     {

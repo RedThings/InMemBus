@@ -1,6 +1,6 @@
-﻿namespace InMemBus.Saga;
+﻿namespace InMemBus.Workflow;
 
-internal class DefaultSaga<TStartingMessage> : InMemBusSaga<TStartingMessage>
+internal class DefaultWorkflow<TStartingMessage> : InMemBusWorkflow<TStartingMessage>
     where TStartingMessage : class
 {
     public override Task HandleStartAsync(TStartingMessage message, CancellationToken cancellationToken) =>

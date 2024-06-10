@@ -1,6 +1,6 @@
 ﻿using System.Linq.Expressions;
 using InMemBus.MessageHandling;
-using InMemBus.Saga;
+using InMemBus.Workflow;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace InMemBus;
@@ -8,16 +8,16 @@ namespace InMemBus;
 public class InMemBusConfiguration
 {
     private readonly IServiceCollection services;
-    private readonly SagasConfiguration sagasConfiguration;
+    private readonly WorkflowsConfiguration workflowsConfiguration;
     private readonly int[] defaultRetryPattern;
 
     public InMemBusConfiguration(IServiceCollection services)
     {
         this.services = services;
 
-        sagasConfiguration = new SagasConfiguration();
+        workflowsConfiguration = new WorkflowsConfiguration();
 
-        services.AddSingleton(sagasConfiguration);
+        services.AddSingleton(workflowsConfiguration);
 
         defaultRetryPattern =
         [
@@ -40,12 +40,12 @@ public class InMemBusConfiguration
         where TMessageHandler : IInMemBusMessageHandler<TMessage> =>
         ConfigureHandler<TMessage, TMessageHandler>();
 
-    public InMemBusConfiguration AddSaga<TStartingMessage, TSaga>(
-        Expression<Func<TStartingMessage, Guid>> sagaIdFinderExpression,
-        Action<InMemBusSagaStepsConfiguration<TStartingMessage, TSaga>> stepConfiguration)
+    public InMemBusConfiguration AddWorkflow<TStartingMessage, TWorkflow>(
+        Expression<Func<TStartingMessage, Guid>> workflowIdFinderExpression,
+        Action<InMemBusWorkflowStepsConfiguration<TStartingMessage, TWorkflow>> stepConfiguration)
         where TStartingMessage : class
-        where TSaga : InMemBusSaga<TStartingMessage> =>
-        ConfigureSaga(sagaIdFinderExpression, stepConfiguration);
+        where TWorkflow : InMemBusWorkflow<TStartingMessage> =>
+        ConfigureWorkflow(workflowIdFinderExpression, stepConfiguration);
 
     internal int MaximumHandlingConcurrency = 200;
 
@@ -66,13 +66,13 @@ public class InMemBusConfiguration
         return this;
     }
 
-    private InMemBusConfiguration ConfigureSaga<TStartingMessage, TSaga>(
-        Expression<Func<TStartingMessage, Guid>> sagaIdFinderExpression, 
-        Action<InMemBusSagaStepsConfiguration<TStartingMessage, TSaga>> stepConfigurationAction)
+    private InMemBusConfiguration ConfigureWorkflow<TStartingMessage, TWorkflow>(
+        Expression<Func<TStartingMessage, Guid>> workflowIdFinderExpression, 
+        Action<InMemBusWorkflowStepsConfiguration<TStartingMessage, TWorkflow>> stepConfigurationAction)
         where TStartingMessage : class
-        where TSaga : InMemBusSaga<TStartingMessage>
+        where TWorkflow : InMemBusWorkflow<TStartingMessage>
     {
-        services.AddScoped(typeof(InMemBusSaga<TStartingMessage>), typeof(TSaga));
+        services.AddScoped(typeof(InMemBusWorkflow<TStartingMessage>), typeof(TWorkflow));
 
         var messageHandlerType = typeof(MessageHandler<TStartingMessage>);
         var messageHandlerRegistrationExists = services.Any(x => x.ServiceType == messageHandlerType);
@@ -82,10 +82,10 @@ public class InMemBusConfiguration
             services.AddScoped(messageHandlerType);
         }
 
-        var stepConfiguration = new InMemBusSagaStepsConfiguration<TStartingMessage, TSaga>(services);
+        var stepConfiguration = new InMemBusWorkflowStepsConfiguration<TStartingMessage, TWorkflow>(services);
         stepConfigurationAction.Invoke(stepConfiguration);
 
-        sagasConfiguration.AddSaga(sagaIdFinderExpression, stepConfiguration);
+        workflowsConfiguration.AddWorkflow(workflowIdFinderExpression, stepConfiguration);
 
         return this;
     }

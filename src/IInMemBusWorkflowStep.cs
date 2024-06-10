@@ -1,6 +1,6 @@
 ﻿namespace InMemBus;
 
-public interface IInMemBusSagaStep<in TMessage> where TMessage : class
+public interface IInMemBusWorkflowStep<in TMessage> where TMessage : class
 {
     Task HandleStepAsync(TMessage message, CancellationToken cancellationToken);
 }

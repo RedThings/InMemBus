@@ -1,6 +1,6 @@
 ﻿using InMemBus.Hosting;
 using InMemBus.MemoryBus;
-using InMemBus.Saga;
+using InMemBus.Workflow;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace InMemBus;
@@ -15,7 +15,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(memBusConfiguration);
         services.AddSingleton<IInMemBus, InMemoryBus>();
-        services.AddSingleton<ISagaManager, SagaManager>();
+        services.AddSingleton<IWorkflowManager, WorkflowManager>();
         services.AddSingleton<InMemBusObserver>();
         services.AddHostedService<InMemBusBackgroundService>();
     }

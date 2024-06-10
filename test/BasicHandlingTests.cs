@@ -1,4 +1,5 @@
 ﻿using InMemBus.Tests.TestInfrastructure;
+using InMemBus.Tests.TestInfrastructure.ComplexWorkflow;
 using Xunit;
 
 namespace InMemBus.Tests;
@@ -10,6 +11,8 @@ public class BasicHandlingTests : IDisposable
     public void Dispose()
     {
         cancellationTokenSource.Cancel();
+
+        GC.SuppressFinalize(this);
     }
 
     [Fact]
@@ -49,5 +52,58 @@ public class BasicHandlingTests : IDisposable
         // Assert
         Assert.True(testDataAsserter.Poll(t => t.AssertMultiple(id, 2)));
     }
+
+    [Fact]
+    public void GivenIHaveAComplexWorkflow_ThatWorkflowShouldBeProcessed_AndTheWorkflowCannotBeReStartedByANonStartingStep()
+    {
+        // Arrange
+        var (inMemBus, testDataAsserter) = InMemBusTester.Instance.Setup(config =>
+        {
+            config
+                .AddMessageHandler<GetPurchasedItemsQuery, GetPurchasedItemsQueryHandler>()
+                .AddMessageHandler<PrepareToShipCommand, PrepareToShipCommandHandler>()
+                .AddMessageHandler<ValidatePurchasedItemCommand, ValidatePurchasedItemCommandHandler>()
+                .AddWorkflow<ItemsPurchasedEvent, PurchaseWorkflow>(msg => msg.PurchaseId, workflow =>
+                {
+                    workflow
+                        .AddStep<PurchasedItemsQueryResult>(msg => msg.PurchaseId)
+                        .AddStep<PurchasedItemValidationSucceededEvent>(msg => msg.PurchaseId)
+                        .AddStep<PurchasedItemValidationFailedEvent>(msg => msg.PurchaseId)
+                        .AddStep<ItemsShippedEvent>(msg => msg.PurchaseId);
+                })
+                .AddWorkflow<ShipItemsCommand, ShippingWorkflow>(msg => msg.ShippingId, workflow =>
+                {
+                    workflow
+                        .AddStep<ItemShippingPreparedEvent>(msg => msg.ShippingId);
+                });
+        }, cancellationTokenSource.Token);
+
+        var purchaseId = Guid.NewGuid();
+        const int maxPollingSeconds = 30;
+
+        // Act
+        inMemBus.Publish(new ItemsPurchasedEvent(purchaseId));
+
+        // Assert (that original workflow completes, and new one cannot be started on step 2)
+        Assert.True(testDataAsserter.Poll(t => t.Assert(purchaseId), maxPollingSeconds));
+
+        testDataAsserter.Remove(purchaseId);
+
+        inMemBus.Publish(new PurchasedItemValidationSucceededEvent(purchaseId, Guid.NewGuid()));
+
+        Assert.False(testDataAsserter.Poll(t => t.Assert(purchaseId), maxPollingSeconds));
+    }
+
+    //[Fact]
+    //public void GivenIHaveAComplexWorkflowThatTimesOut_ThatWorkflowShouldTimeOut()
+    //{
+
+    //}
+
+    //[Fact]
+    //public void GivenIHaveAComplexWorkflow_ThatWorkCannotBeStartedByANonStartingMessage()
+    //{
+
+    //}
 }
 

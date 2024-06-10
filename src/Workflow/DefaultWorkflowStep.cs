@@ -1,6 +1,6 @@
-﻿namespace InMemBus.Saga;
+﻿namespace InMemBus.Workflow;
 
-internal class DefaultSagaStep<TMessage> : IInMemBusSagaStep<TMessage>
+internal class DefaultWorkflowStep<TMessage> : IInMemBusWorkflowStep<TMessage>
     where TMessage : class
 {
     public Task HandleStepAsync(TMessage message, CancellationToken cancellationToken) =>

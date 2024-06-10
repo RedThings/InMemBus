@@ -1,15 +1,15 @@
-﻿namespace InMemBus.Saga;
+﻿namespace InMemBus.Workflow;
 
-internal class SagaConfiguration(
-    SagaStep startingStep,
-    IReadOnlyCollection<SagaStep> otherSteps
+internal class WorkflowConfiguration(
+    WorkflowStep startingStep,
+    IReadOnlyCollection<WorkflowStep> otherSteps
 )
 {
     public bool HandlesMessage(Type messageType) =>
         startingStep.MessageBeingHandledType == messageType ||
         otherSteps.Select(x => x.MessageBeingHandledType).Contains(messageType);
 
-    public SagaStep GetStepForMessage(Type type) =>
+    public WorkflowStep GetStepForMessage(Type type) =>
         startingStep.MessageBeingHandledType == type 
             ? startingStep 
             : otherSteps.Single(x => x.MessageBeingHandledType == type);
