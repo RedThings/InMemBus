@@ -12,6 +12,12 @@ public class PurchaseWorkflow(IInMemBus inMemBus, TestDataAsserter testDataAsser
     public override async Task HandleStartAsync(ItemsPurchasedEvent message, CancellationToken cancellationToken)
     {
         await Task.CompletedTask;
+
+        if (message.TestInstruction == "add-timeout")
+        {
+            AddTimeout(() => DoAThing(message.TestValue), TimeSpan.FromSeconds(5));
+            return;
+        }
         
         inMemBus.Send(new GetPurchasedItemsQuery(message.PurchaseId));
     }
@@ -57,6 +63,13 @@ public class PurchaseWorkflow(IInMemBus inMemBus, TestDataAsserter testDataAsser
 
         testDataAsserter.Add(message.PurchaseId);
 
+        CompleteWorkflow();
+    }
+
+    private async Task DoAThing(string value)
+    {
+        await Task.CompletedTask;
+        testDataAsserter.Add(value);
         CompleteWorkflow();
     }
 }

@@ -3,9 +3,12 @@
 public class TestDataAsserter
 {
     private readonly List<Guid> ids = [];
+    private readonly List<string> values = [];
 
     public void Add(Guid id) => ids.Add(id);
+    public void Add(string value) => values.Add(value);
     public bool Assert(Guid id) => ids.Contains(id);
+    public bool Assert(string value) => values.Contains(value);
     public bool AssertMultiple(Guid id, int howMany) => ids.Count(x => x == id) == howMany;
     public void Remove(Guid id) => ids.Remove(id);
 

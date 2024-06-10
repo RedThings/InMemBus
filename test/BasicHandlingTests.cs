@@ -57,7 +57,44 @@ public class BasicHandlingTests : IDisposable
     public void GivenIHaveAComplexWorkflow_ThatWorkflowShouldBeProcessed_AndTheWorkflowCannotBeReStartedByANonStartingStep()
     {
         // Arrange
-        var (inMemBus, testDataAsserter) = InMemBusTester.Instance.Setup(config =>
+        var (inMemBus, testDataAsserter) = SetupComplexWorkflow();
+
+        var purchaseId = Guid.NewGuid();
+        const int maxPollingSeconds = 30;
+
+        // Act
+        inMemBus.Publish(new ItemsPurchasedEvent(purchaseId));
+
+        // Assert (that original workflow completes, and new one cannot be started on step 2)
+        Assert.True(testDataAsserter.Poll(t => t.Assert(purchaseId), maxPollingSeconds));
+
+        testDataAsserter.Remove(purchaseId);
+
+        inMemBus.Publish(new PurchasedItemValidationSucceededEvent(purchaseId, Guid.NewGuid()));
+
+        Assert.False(testDataAsserter.Poll(t => t.Assert(purchaseId), maxPollingSeconds));
+    }
+
+    [Fact]
+    public void GivenIHaveAComplexWorkflowThatTimesOut_ThatWorkflowShouldTimeOut()
+    {
+        // Arrange
+        var (inMemBus, testDataAsserter) = SetupComplexWorkflow();
+
+        var purchaseId = Guid.NewGuid();
+        const string testInstruction = "add-timeout";
+        var testValue = Guid.NewGuid().ToString();
+
+        // Act
+        inMemBus.Publish(new ItemsPurchasedEvent(purchaseId, testInstruction, testValue));
+
+        // Assert
+        Assert.True(testDataAsserter.Poll(t => t.Assert(testValue)));
+    }
+
+    private (IInMemBus inMemBus, TestDataAsserter testDataAsserter) SetupComplexWorkflow()
+    {
+        return InMemBusTester.Instance.Setup(config =>
         {
             config
                 .AddMessageHandler<GetPurchasedItemsQuery, GetPurchasedItemsQueryHandler>()
@@ -77,33 +114,6 @@ public class BasicHandlingTests : IDisposable
                         .AddStep<ItemShippingPreparedEvent>(msg => msg.ShippingId);
                 });
         }, cancellationTokenSource.Token);
-
-        var purchaseId = Guid.NewGuid();
-        const int maxPollingSeconds = 30;
-
-        // Act
-        inMemBus.Publish(new ItemsPurchasedEvent(purchaseId));
-
-        // Assert (that original workflow completes, and new one cannot be started on step 2)
-        Assert.True(testDataAsserter.Poll(t => t.Assert(purchaseId), maxPollingSeconds));
-
-        testDataAsserter.Remove(purchaseId);
-
-        inMemBus.Publish(new PurchasedItemValidationSucceededEvent(purchaseId, Guid.NewGuid()));
-
-        Assert.False(testDataAsserter.Poll(t => t.Assert(purchaseId), maxPollingSeconds));
     }
-
-    //[Fact]
-    //public void GivenIHaveAComplexWorkflowThatTimesOut_ThatWorkflowShouldTimeOut()
-    //{
-
-    //}
-
-    //[Fact]
-    //public void GivenIHaveAComplexWorkflow_ThatWorkCannotBeStartedByANonStartingMessage()
-    //{
-
-    //}
 }
 
