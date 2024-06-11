@@ -4,145 +4,149 @@ using Microsoft.Extensions.Logging;
 
 namespace InMemBus.Workflow;
 
-internal class WorkflowManager : IWorkflowManager
+internal class WorkflowManager(ILogger<WorkflowManager> logger) : IWorkflowManager
 {
-    private readonly ILogger<WorkflowManager> logger;
+    private static readonly object LockObject = new();
     private readonly ConcurrentDictionary<Guid, AliveWorkflow> workflows = [];
-
-    public WorkflowManager(ILogger<WorkflowManager> logger)
-    {
-        this.logger = logger;
-        StartCheckingTimeouts();
-    }
 
     public WorkflowCreationResult<TStartingMessage> TryCreateNewWorkflow<TStartingMessage>(IServiceProvider currentScopeServiceProvider, object message, WorkflowStep step)
         where TStartingMessage : class
     {
-        var workflowId = step.CompiledFinderExpression.Invoke(message);
-        var workflowExists = workflows.TryGetValue(workflowId, out var aliveWorkflow);
-
-        if (workflowExists)
+        lock (LockObject)
         {
-            return new WorkflowCreationResult<TStartingMessage>(
-                success: false,
-                new DefaultWorkflow<TStartingMessage>(),
-                () => { }
-            );
-        }
+            var workflowId = step.CompiledFinderExpression.Invoke(message);
+            var workflowExists = workflows.TryGetValue(workflowId, out var aliveWorkflow);
 
-        var newWorkflow = currentScopeServiceProvider.GetRequiredService<InMemBusWorkflow<TStartingMessage>>();
-        aliveWorkflow = new AliveWorkflow(
-            newWorkflow,
-            getIsComplete: () => newWorkflow.Complete,
-            getOutstandingTimeouts: () => newWorkflow.GetOutstandingTimeouts(),
-            removeOutstandingTimeouts: () => newWorkflow.RemoveOutstandingTimeouts());
-
-        var addedOk = workflows.TryAdd(workflowId, aliveWorkflow);
-
-        if (!addedOk)
-        {
-            return new WorkflowCreationResult<TStartingMessage>(
-                success: false,
-                new DefaultWorkflow<TStartingMessage>(),
-                () => { }
-            );
-        }
-
-        return new WorkflowCreationResult<TStartingMessage>(
-            success: true,
-            newWorkflow,
-            () =>
+            if (workflowExists)
             {
-                if (newWorkflow.Complete)
-                {
-                    workflows.Remove(workflowId, out _);
-                    return;
-                }
-
-                aliveWorkflow.Unlock();
+                return new WorkflowCreationResult<TStartingMessage>(
+                    success: false,
+                    new DefaultWorkflow<TStartingMessage>(),
+                    () => { }
+                );
             }
-        );
+
+            var newWorkflow = currentScopeServiceProvider.GetRequiredService<InMemBusWorkflow<TStartingMessage>>();
+            aliveWorkflow = new AliveWorkflow(
+                newWorkflow,
+                getIsComplete: () => newWorkflow.Complete,
+                getOutstandingTimeouts: () => newWorkflow.GetOutstandingTimeouts(),
+                removeOutstandingTimeouts: () => newWorkflow.RemoveOutstandingTimeouts());
+
+            var addedOk = workflows.TryAdd(workflowId, aliveWorkflow);
+
+            if (!addedOk)
+            {
+                return new WorkflowCreationResult<TStartingMessage>(
+                    success: false,
+                    new DefaultWorkflow<TStartingMessage>(),
+                    () => { }
+                );
+            }
+
+            return new WorkflowCreationResult<TStartingMessage>(
+                success: true,
+                newWorkflow,
+                () =>
+                {
+                    if (newWorkflow.Complete)
+                    {
+                        lock (LockObject)
+                        {
+                            workflows.Remove(workflowId, out _);
+                        }
+
+                        return;
+                    }
+
+                    aliveWorkflow.Unlock();
+                }
+            );
+        }
     }
 
     public WorkflowAccessResult<TMessage> TryGetWorkflowForStep<TMessage>(object message, WorkflowStep step)
         where TMessage : class
     {
-        var workflowId = step.CompiledFinderExpression.Invoke(message);
-        var workflowExists = workflows.TryGetValue(workflowId, out var aliveWorkflow);
-
-        if (!workflowExists || aliveWorkflow is not { Workflow: IInMemBusWorkflowStep<TMessage> workflowStep } || aliveWorkflow.Locked)
+        lock (LockObject)
         {
+            var workflowId = step.CompiledFinderExpression.Invoke(message);
+            var workflowExists = workflows.TryGetValue(workflowId, out var aliveWorkflow);
+
+            if (!workflowExists || aliveWorkflow is not { Workflow: IInMemBusWorkflowStep<TMessage> workflowStep } || aliveWorkflow.Locked)
+            {
+                return new WorkflowAccessResult<TMessage>(
+                    success: false,
+                    new DefaultWorkflowStep<TMessage>(),
+                    () => { }
+                );
+            }
+
+            aliveWorkflow.Lock();
+
             return new WorkflowAccessResult<TMessage>(
-                success: false,
-                new DefaultWorkflowStep<TMessage>(),
-                () => { }
+                success: true,
+                workflowStep,
+                () =>
+                {
+                    if (aliveWorkflow.GetIsComplete.Invoke())
+                    {
+                        lock (LockObject)
+                        {
+                            workflows.Remove(workflowId, out _);
+                        }
+
+                        return;
+                    }
+
+                    aliveWorkflow.Unlock();
+                }
             );
         }
-
-        aliveWorkflow.Lock();
-
-        return new WorkflowAccessResult<TMessage>(
-            success: true,
-            workflowStep,
-            () =>
-            {
-                if (aliveWorkflow.GetIsComplete.Invoke())
-                {
-                    workflows.Remove(workflowId, out _);
-                    return;
-                }
-
-                aliveWorkflow.Unlock();
-            }
-        );
     }
 
-    private void StartCheckingTimeouts()
+    public async Task ProcessOutstandingTimeoutsAsync()
     {
-        Task.Factory.StartNew(async () =>
+        await Task.CompletedTask;
+
+        lock (LockObject)
         {
-            while (true)
+            var workflowsWithTimeouts = workflows.Where(x => x.Value.HasOutstandingTimeouts()).Select(x => x.Value).ToArray();
+
+            if (workflowsWithTimeouts.Length < 1)
             {
-                var workflowsWithTimeouts = workflows.Where(x => x.Value.HasOutstandingTimeouts()).Select(x => x.Value).ToArray();
+                return;
+            }
 
-                if (workflowsWithTimeouts.Length < 1)
+            foreach (var aliveWorkflow in workflowsWithTimeouts)
+            {
+                try
                 {
-                    continue;
-                }
+                    if (aliveWorkflow.Locked)
+                    {
+                        continue;
+                    }
 
-                foreach (var aliveWorkflow in workflowsWithTimeouts)
-                {
+                    aliveWorkflow.Lock();
+
                     try
                     {
-                        if (aliveWorkflow.Locked)
-                        {
-                            continue;
-                        }
-
-                        aliveWorkflow.Lock();
-
-                        try
-                        {
-                            await aliveWorkflow.ProcessOutstandingTimeouts();
-                        }
-                        catch (Exception innerEx)
-                        {
-                            logger.LogError(innerEx, "Error occurred when attempting to process a single workflow's outstanding timeouts");
-                        }
-                        finally
-                        {
-                            aliveWorkflow.Unlock();
-                        }
+                        aliveWorkflow.ProcessOutstandingTimeouts().GetAwaiter().GetResult();
                     }
-                    catch (Exception ex)
+                    catch (Exception innerEx)
                     {
-                        logger.LogError(ex, "Error occurred when attempting to process all outstanding timeouts");
+                        logger.LogError(innerEx, "Error occurred when attempting to process a single workflow's outstanding timeouts");
+                    }
+                    finally
+                    {
+                        aliveWorkflow.Unlock();
                     }
                 }
-
-                await Task.Delay(1);
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error occurred when attempting to process all outstanding timeouts");
+                }
             }
-            // ReSharper disable once FunctionNeverReturns
-        }, TaskCreationOptions.LongRunning);
+        }
     }
 }

@@ -16,6 +16,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(memBusConfiguration);
         services.AddSingleton<IInMemBus, InMemoryBus>();
         services.AddSingleton<IWorkflowManager, WorkflowManager>();
+        services.AddSingleton<WorkflowTimeoutsObserver>();
+        services.AddHostedService<WorkflowTimeoutsBackgroundService>();
         services.AddSingleton<InMemBusObserver>();
         services.AddHostedService<InMemBusBackgroundService>();
     }

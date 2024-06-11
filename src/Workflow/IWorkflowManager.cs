@@ -7,4 +7,6 @@ internal interface IWorkflowManager
 
     WorkflowAccessResult<TMessage> TryGetWorkflowForStep<TMessage>(object message, WorkflowStep step)
         where TMessage : class;
+
+    Task ProcessOutstandingTimeoutsAsync();
 }

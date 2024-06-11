@@ -1,10 +1,11 @@
-﻿using InMemBus.Tests.TestInfrastructure;
-using InMemBus.Tests.TestInfrastructure.ComplexWorkflow;
+﻿using InMemBus.TestInfrastructure;
+using InMemBus.TestInfrastructure.ComplexWorkflow;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace InMemBus.Tests;
 
-public class BasicHandlingTests : IDisposable
+public class BasicHandlingTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
@@ -19,10 +20,10 @@ public class BasicHandlingTests : IDisposable
     public void GivenIHaveSentAMessage_ItShouldBeHandled()
     {
         // Arrange
-        var (inMemBus, testDataAsserter) = InMemBusTester.Instance.Setup(c =>
+        var (inMemBus, testDataAsserter) = TestHelper.Instance.Setup(c =>
         {
             c.AddMessageHandler<DoSomethingCommand, DoSomethingCommandHandler>();
-        }, cancellationTokenSource.Token);
+        }, testOutputHelper, cancellationTokenSource.Token);
 
         var id = Guid.NewGuid();
 
@@ -37,12 +38,12 @@ public class BasicHandlingTests : IDisposable
     public void GivenIHavePublishedAMessage_ItShouldBeHandledInMultipleHandlers()
     {
         // Arrange
-        var (inMemBus, testDataAsserter) = InMemBusTester.Instance.Setup(config =>
+        var (inMemBus, testDataAsserter) = TestHelper.Instance.Setup(config =>
         {
             config
                 .AddMessageHandler<SomethingHappenedEvent, SomethingHappenedEventHandler1>()
                 .AddMessageHandler<SomethingHappenedEvent, SomethingHappenedEventHandler2>();
-        }, cancellationTokenSource.Token);
+        }, testOutputHelper, cancellationTokenSource.Token);
 
         var id = Guid.NewGuid();
 
@@ -57,7 +58,7 @@ public class BasicHandlingTests : IDisposable
     public void GivenIHaveAComplexWorkflow_ThatWorkflowShouldBeProcessed_AndTheWorkflowCannotBeReStartedByANonStartingStep()
     {
         // Arrange
-        var (inMemBus, testDataAsserter) = SetupComplexWorkflow();
+        var (inMemBus, testDataAsserter) = TestHelper.Instance.SetupComplexWorkflow(testOutputHelper, cancellationTokenSource.Token);
 
         var purchaseId = Guid.NewGuid();
         const int maxPollingSeconds = 30;
@@ -68,18 +69,18 @@ public class BasicHandlingTests : IDisposable
         // Assert (that original workflow completes, and new one cannot be started on step 2)
         Assert.True(testDataAsserter.Poll(t => t.Assert(purchaseId), maxPollingSeconds));
 
-        testDataAsserter.Remove(purchaseId);
+        var newPurchaseId = Guid.NewGuid();
 
-        inMemBus.Publish(new PurchasedItemValidationSucceededEvent(purchaseId, Guid.NewGuid()));
+        inMemBus.Publish(new PurchasedItemValidationSucceededEvent(newPurchaseId, Guid.NewGuid()));
 
-        Assert.False(testDataAsserter.Poll(t => t.Assert(purchaseId), maxPollingSeconds));
+        Assert.False(testDataAsserter.Poll(t => t.Assert(newPurchaseId), maxPollingSeconds));
     }
 
     [Fact]
     public void GivenIHaveAComplexWorkflowThatTimesOut_ThatWorkflowShouldTimeOut()
     {
         // Arrange
-        var (inMemBus, testDataAsserter) = SetupComplexWorkflow();
+        var (inMemBus, testDataAsserter) = TestHelper.Instance.SetupComplexWorkflow(testOutputHelper, cancellationTokenSource.Token);
 
         var purchaseId = Guid.NewGuid();
         const string testInstruction = "add-timeout";
@@ -90,30 +91,6 @@ public class BasicHandlingTests : IDisposable
 
         // Assert
         Assert.True(testDataAsserter.Poll(t => t.Assert(testValue)));
-    }
-
-    private (IInMemBus inMemBus, TestDataAsserter testDataAsserter) SetupComplexWorkflow()
-    {
-        return InMemBusTester.Instance.Setup(config =>
-        {
-            config
-                .AddMessageHandler<GetPurchasedItemsQuery, GetPurchasedItemsQueryHandler>()
-                .AddMessageHandler<PrepareToShipCommand, PrepareToShipCommandHandler>()
-                .AddMessageHandler<ValidatePurchasedItemCommand, ValidatePurchasedItemCommandHandler>()
-                .AddWorkflow<ItemsPurchasedEvent, PurchaseWorkflow>(msg => msg.PurchaseId, workflow =>
-                {
-                    workflow
-                        .AddStep<PurchasedItemsQueryResult>(msg => msg.PurchaseId)
-                        .AddStep<PurchasedItemValidationSucceededEvent>(msg => msg.PurchaseId)
-                        .AddStep<PurchasedItemValidationFailedEvent>(msg => msg.PurchaseId)
-                        .AddStep<ItemsShippedEvent>(msg => msg.PurchaseId);
-                })
-                .AddWorkflow<ShipItemsCommand, ShippingWorkflow>(msg => msg.ShippingId, workflow =>
-                {
-                    workflow
-                        .AddStep<ItemShippingPreparedEvent>(msg => msg.ShippingId);
-                });
-        }, cancellationTokenSource.Token);
     }
 }
 
