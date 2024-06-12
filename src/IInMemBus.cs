@@ -8,4 +8,5 @@ public interface IInMemBus
     public void Publish<TEvent>(TEvent @event) where TEvent : class;
     internal IReadOnlyCollection<Message> GetNextMessagesToProcess(int maxMessagesToDequeue);
     internal void Requeue(Message message);
+    internal void AddProcessedMessage(Message message);
 }

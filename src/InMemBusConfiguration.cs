@@ -35,6 +35,12 @@ public class InMemBusConfiguration
         return this;
     }
 
+    public InMemBusConfiguration UseDebugMode()
+    {
+        DebugMode = true;
+        return this;
+    }
+
     public InMemBusConfiguration AddMessageHandler<TMessage, TMessageHandler>()
         where TMessage : class
         where TMessageHandler : IInMemBusMessageHandler<TMessage> =>
@@ -47,7 +53,8 @@ public class InMemBusConfiguration
         where TWorkflow : InMemBusWorkflow<TStartingMessage> =>
         ConfigureWorkflow(workflowIdFinderExpression, stepConfiguration);
 
-    internal int MaximumHandlingConcurrency = 200;
+    internal int MaximumHandlingConcurrency = 2000;
+    internal bool DebugMode;
 
     private InMemBusConfiguration ConfigureHandler<TMessage, TMessageHandler>()
         where TMessage : class

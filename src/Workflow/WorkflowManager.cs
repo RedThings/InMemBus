@@ -107,7 +107,7 @@ internal class WorkflowManager(ILogger<WorkflowManager> logger) : IWorkflowManag
 
     public async Task ProcessOutstandingTimeoutsAsync()
     {
-        await Task.CompletedTask;
+        await Task.CompletedTask.ConfigureAwait(false);
 
         lock (LockObject)
         {
@@ -147,6 +147,21 @@ internal class WorkflowManager(ILogger<WorkflowManager> logger) : IWorkflowManag
                     logger.LogError(ex, "Error occurred when attempting to process all outstanding timeouts");
                 }
             }
+        }
+    }
+
+    public object? GetWorkflowForDebugging(Guid id)
+    {
+        lock (LockObject)
+        {
+            var workflowExists = workflows.TryGetValue(id, out var aliveWorkflow);
+
+            if (!workflowExists || aliveWorkflow == null)
+            {
+                return null;
+            }
+
+            return aliveWorkflow.Workflow;
         }
     }
 }

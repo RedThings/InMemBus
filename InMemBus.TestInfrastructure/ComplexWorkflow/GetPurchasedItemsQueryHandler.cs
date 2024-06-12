@@ -6,7 +6,7 @@ public class GetPurchasedItemsQueryHandler(IInMemBus inMemBus) : IInMemBusMessag
     {
         await Delayer.DelayAsync();
 
-        var numberOfItems = Faker.RandomNumber.Next(0, 10);
+        var numberOfItems = Faker.RandomNumber.Next(1, 10);
 
         var items = new List<PurchasedItem>(numberOfItems);
 

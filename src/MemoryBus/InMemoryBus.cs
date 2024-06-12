@@ -3,13 +3,32 @@ using Microsoft.Extensions.Logging;
 
 namespace InMemBus.MemoryBus;
 
-internal class InMemoryBus(ILogger<InMemoryBus> logger) : IInMemBus
+internal class InMemoryBus(ILogger<InMemoryBus> logger, InMemBusConfiguration configuration) : IInMemBus
 {
     private readonly ConcurrentQueue<Message> queue = [];
+    private readonly ConcurrentBag<Message> receivedMessages = [];
+    private readonly ConcurrentBag<Message> processedMessages = [];
 
     public void Send<TMessage>(TMessage message)
         where TMessage : class
     {
+        if (configuration.DebugMode)
+        {
+            var id = Guid.NewGuid();
+
+            if (receivedMessages.Any(x => x.Id == id))
+            {
+                logger.LogError("Message with the ID {id} has already been received - nothing will happen, this is just for information", id);
+            }
+
+            if (processedMessages.Any(x => x.Id == id))
+            {
+                logger.LogError("Message with the ID {id} has already been processed - nothing will happen, this is just for information", id);
+            }
+
+            receivedMessages.Add(new Message(message).WithId(id));
+        }
+
         queue.Enqueue(new Message(message));
     }
 
@@ -48,5 +67,10 @@ internal class InMemoryBus(ILogger<InMemoryBus> logger) : IInMemBus
         }
 
         queue.Enqueue(message);
+    }
+
+    public void AddProcessedMessage(Message message)
+    {
+        processedMessages.Add(message);
     }
 }

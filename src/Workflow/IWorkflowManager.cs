@@ -9,4 +9,6 @@ internal interface IWorkflowManager
         where TMessage : class;
 
     Task ProcessOutstandingTimeoutsAsync();
+
+    object? GetWorkflowForDebugging(Guid id);
 }

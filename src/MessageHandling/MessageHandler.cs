@@ -88,6 +88,11 @@ internal class MessageHandler<TMessage>(
         }
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
+
+        if (memBusConfiguration.DebugMode)
+        {
+            inMemBus.AddProcessedMessage(message);
+        }
     }
 
     private async Task HandleWithRetriesAsync(Type messageType, Func<Task> taskFunc)

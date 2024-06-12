@@ -10,6 +10,7 @@ namespace InMemBus.Tests;
 
 public class LoadTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
+    private int jsonLogCount;
     private readonly CancellationTokenSource cancellationTokenSource = new();
     private readonly HttpClient httpClient = new();
 
@@ -23,15 +24,15 @@ public class LoadTests(ITestOutputHelper testOutputHelper) : IDisposable
     [Theory]
     [InlineData(1, 1000, 10)]
     [InlineData(10, 500, 20)]
-    //[InlineData(20, 500, 20)]
-    //[InlineData(30, 500, 20)]
-    //[InlineData(40, 500, 20)]
-    //[InlineData(50, 500, 20)]
-    //[InlineData(60, 500, 20)]
-    //[InlineData(70, 500, 20)]
-    //[InlineData(80, 500, 20)]
-    //[InlineData(90, 500, 20)]
-    //[InlineData(100, 500, 20)]
+    [InlineData(20, 500, 20)]
+    [InlineData(30, 500, 20)]
+    [InlineData(40, 500, 20)]
+    [InlineData(50, 500, 20)]
+    [InlineData(60, 500, 20)]
+    [InlineData(70, 500, 20)]
+    [InlineData(80, 500, 20)]
+    [InlineData(90, 500, 20)]
+    [InlineData(100, 500, 20)]
     public async Task AtScale_WorkflowShouldComplete_InAReasonableTime(int users, int intervalMs, int durationSeconds)
     {
         // Arrange
@@ -42,7 +43,7 @@ public class LoadTests(ITestOutputHelper testOutputHelper) : IDisposable
         {
             throw new Exception($"Url {pingUrl} could not be reached. Test will not run.");
         }
-
+        
         const string testTitle = "Complex Workflow";
         var sink = new CustomerNBomberReportingSink(testTitle, testOutputHelper);
 
@@ -120,7 +121,27 @@ public class LoadTests(ITestOutputHelper testOutputHelper) : IDisposable
                 }
 
                 sw.Stop();
-                testOutputHelper.WriteLine($"*!!***** Workflow {purchaseId} failed in {sw.ElapsedMilliseconds}ms ***!!*");
+                //testOutputHelper.WriteLine($"*!!***** Workflow {purchaseId} failed in {sw.ElapsedMilliseconds}ms ***!!*");
+
+                if (jsonLogCount < 4)
+                {
+                    jsonLogCount++;
+                    using var workflowRequest = Http.CreateRequest("GET", $"http://localhost:5292/workflow/{purchaseId}");
+                    var workflowResponse = await Http.Send(httpClient, workflowRequest);
+
+                    if (workflowResponse.IsError)
+                    {
+                        testOutputHelper.WriteLine($"Getting failed workflow failed. Response was {workflowResponse.StatusCode}");
+                    }
+                    else
+                    {
+                        testOutputHelper.WriteLine("Failed workflow exists:");
+                        testOutputHelper.WriteLine("");
+                        testOutputHelper.WriteLine(await workflowResponse.Payload.Value.Content.ReadAsStringAsync());
+                        testOutputHelper.WriteLine("");
+                    }
+                }
+
                 return Response.Fail();
             }
             catch (Exception ex)
