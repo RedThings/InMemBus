@@ -20,7 +20,7 @@ internal class AliveWorkflow(
 
         foreach (var outstandingTimeout in outstandingTimeouts)
         {
-            await outstandingTimeout.Invoke();
+            await outstandingTimeout.Invoke().ConfigureAwait(false);
         }
 
         removeOutstandingTimeouts.Invoke();

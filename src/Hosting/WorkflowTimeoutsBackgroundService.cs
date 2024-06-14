@@ -6,5 +6,5 @@ namespace InMemBus.Hosting;
 internal class WorkflowTimeoutsBackgroundService(WorkflowTimeoutsObserver workflowTimeoutsObserver) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) =>
-        await workflowTimeoutsObserver.ExecuteAsync(stoppingToken);
+        await workflowTimeoutsObserver.ExecuteAsync(stoppingToken).ConfigureAwait(false);
 }

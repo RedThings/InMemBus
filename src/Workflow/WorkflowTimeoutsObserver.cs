@@ -6,9 +6,9 @@ internal class WorkflowTimeoutsObserver(IWorkflowManager workflowManager)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            await workflowManager.ProcessOutstandingTimeoutsAsync();
+            await workflowManager.ProcessOutstandingTimeoutsAsync().ConfigureAwait(false);
 
-            await Task.Delay(1000, cancellationToken);
+            await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
         }
     }
 }
