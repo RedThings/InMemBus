@@ -152,7 +152,6 @@ public class LoadTests(ITestOutputHelper testOutputHelper) : IDisposable
         });
 
         return scenario
-            //.WithWarmUpDuration(TimeSpan.FromSeconds(0))
             .WithoutWarmUp()
             .WithLoadSimulations(Simulation.Inject(users, TimeSpan.FromMilliseconds(intervalMs), TimeSpan.FromSeconds(durationSeconds)));
     }

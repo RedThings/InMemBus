@@ -8,6 +8,6 @@ public class ValidatePurchasedItemCommandHandler(IInMemBus inMemBus) : IInMemBus
 
         // todo: for tests purposes have an extra field somehow that invalidates
 
-        inMemBus.Publish(new PurchasedItemValidationSucceededEvent(message.PurchaseId, message.PurchasedItem.PurchasedItemId));
+        await inMemBus.PublishAsync(new PurchasedItemValidationSucceededEvent(message.PurchaseId, message.PurchasedItem.PurchasedItemId));
     }
 }

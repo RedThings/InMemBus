@@ -17,7 +17,7 @@ builder.Services.AddLogging();
 builder.Services.UseInMemBus(config =>
 {
     config.SetMaximumHandlingConcurrency(2000);
-    config.UseDebugMode();
+    //config.UseDebugMode();
 
     TestHelper.Instance.ConfigureComplexWorkflow(config);
 });
@@ -31,7 +31,7 @@ app.MapGet("livez", (HttpContext _) => Results.Ok());
 app.MapPost("complete-purchase/{purchaseId:guid}",
     ([FromServices] IInMemBus inMemBus, [FromRoute] Guid purchaseId) =>
     {
-        inMemBus.Publish(new ItemsPurchasedEvent(purchaseId));
+        inMemBus.PublishAsync(new ItemsPurchasedEvent(purchaseId));
 
         return Results.Accepted();
     });

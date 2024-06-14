@@ -8,20 +8,20 @@ public class ShippingWorkflow(IInMemBus inMemBus) : InMemBusWorkflow<ShipItemsCo
 
     public override async Task HandleStartAsync(ShipItemsCommand message, CancellationToken cancellationToken)
     {
-        await Task.CompletedTask;
-
         originalMessage = message;
 
-        foreach (var purchasedItem in message.Items)
+        var tasks = new Task[message.Items.Count];
+
+        for (var i = 0; i < message.Items.Count; i++)
         {
-            inMemBus.Send(new PrepareToShipCommand(message.PurchaseId, message.ShippingId, purchasedItem));
+            tasks[i] = inMemBus.SendAsync(new PrepareToShipCommand(message.PurchaseId, message.ShippingId, message.Items.ElementAt(i)));
         }
+
+        await Task.WhenAll(tasks);
     }
 
     public async Task HandleStepAsync(ItemShippingPreparedEvent message, CancellationToken cancellationToken)
     {
-        await Task.CompletedTask;
-
         shippingPreparedEvents.Add(message);
 
         if (originalMessage != null && shippingPreparedEvents.Count < originalMessage.Items.Count)
@@ -29,7 +29,7 @@ public class ShippingWorkflow(IInMemBus inMemBus) : InMemBusWorkflow<ShipItemsCo
             return;
         }
 
-        inMemBus.Publish(new ItemsShippedEvent(message.PurchaseId));
+        await inMemBus.PublishAsync(new ItemsShippedEvent(message.PurchaseId));
 
         CompleteWorkflow();
     }

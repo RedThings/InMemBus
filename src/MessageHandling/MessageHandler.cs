@@ -67,7 +67,8 @@ internal class MessageHandler<TMessage>(
                                   + "take place and the message will be requeued.", messageType);
 
             workflowTaskFuncs.Clear();
-            inMemBus.Requeue(message);
+
+            await inMemBus.RequeueAsync(message).ConfigureAwait(false);
 
             return;
         }

@@ -17,6 +17,6 @@ public class GetPurchasedItemsQueryHandler(IInMemBus inMemBus) : IInMemBusMessag
             items.Add(new PurchasedItem(Guid.NewGuid(), Guid.NewGuid(), price));
         }
 
-        inMemBus.Send(new PurchasedItemsQueryResult(message.PurchaseId, items));
+        await inMemBus.SendAsync(new PurchasedItemsQueryResult(message.PurchaseId, items));
     }
 }

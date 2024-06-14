@@ -1,8 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+﻿namespace InMemBus.TestInfrastructure.ComplexWorkflow;
 
-namespace InMemBus.TestInfrastructure.ComplexWorkflow;
-
-public class PurchaseWorkflow(ILogger<PurchaseWorkflow> logger, IInMemBus inMemBus, TestDataAsserter testDataAsserter) : InMemBusWorkflow<ItemsPurchasedEvent>,
+public class PurchaseWorkflow(IInMemBus inMemBus, TestDataAsserter testDataAsserter) : InMemBusWorkflow<ItemsPurchasedEvent>,
     IInMemBusWorkflowStep<PurchasedItemsQueryResult>,
     IInMemBusWorkflowStep<PurchasedItemValidationSucceededEvent>,
     IInMemBusWorkflowStep<PurchasedItemValidationFailedEvent>,
@@ -16,12 +14,6 @@ public class PurchaseWorkflow(ILogger<PurchaseWorkflow> logger, IInMemBus inMemB
 
     public override async Task HandleStartAsync(ItemsPurchasedEvent message, CancellationToken cancellationToken)
     {
-        //testDataAsserter.IncrementCounter();
-
-        //sw.Start();
-
-        await Task.CompletedTask;
-
         PurchaseId = message.PurchaseId;
 
         if (message.TestInstruction == "add-timeout")
@@ -30,15 +22,13 @@ public class PurchaseWorkflow(ILogger<PurchaseWorkflow> logger, IInMemBus inMemB
             return;
         }
 
-        inMemBus.Send(new GetPurchasedItemsQuery(message.PurchaseId));
+        await inMemBus.SendAsync(new GetPurchasedItemsQuery(message.PurchaseId));
 
         State = $"Handled {message}";
     }
 
     public async Task HandleStepAsync(PurchasedItemsQueryResult message, CancellationToken cancellationToken)
     {
-        await Task.CompletedTask;
-
         PurchasedItems.AddRange(message.Items);
 
         if (PurchasedItems.Count < 1)
@@ -47,18 +37,20 @@ public class PurchaseWorkflow(ILogger<PurchaseWorkflow> logger, IInMemBus inMemB
             return;
         }
 
-        foreach (var purchasedItem in message.Items)
+        var tasks = new Task[message.Items.Count];
+
+        for (var i = 0; i < message.Items.Count; i++)
         {
-            inMemBus.Send(new ValidatePurchasedItemCommand(message.PurchaseId, purchasedItem));
+            tasks[i] = inMemBus.SendAsync(new ValidatePurchasedItemCommand(message.PurchaseId, message.Items.ElementAt(i)));
         }
+
+        await Task.WhenAll(tasks);
 
         State = $"Handled {message} - item count = ";
     }
 
     public async Task HandleStepAsync(PurchasedItemValidationSucceededEvent message, CancellationToken cancellationToken)
     {
-        await Task.CompletedTask;
-
         NumberOfSuccessfullyValidatedPurchasedItems++;
 
         if (NumberOfSuccessfullyValidatedPurchasedItems < PurchasedItems.Count)
@@ -66,18 +58,14 @@ public class PurchaseWorkflow(ILogger<PurchaseWorkflow> logger, IInMemBus inMemB
             return;
         }
 
-        //logger.LogInformation("Workflow {n} handled all PurchasedItemValidationSucceededEvent", message.PurchaseId);
-
-        inMemBus.Send(new ShipItemsCommand(message.PurchaseId, ShippingId: Guid.NewGuid(), PurchasedItems));
+        await inMemBus.SendAsync(new ShipItemsCommand(message.PurchaseId, ShippingId: Guid.NewGuid(), PurchasedItems));
 
         State = $"Handled {message}";
     }
 
     public async Task HandleStepAsync(PurchasedItemValidationFailedEvent message, CancellationToken cancellationToken)
     {
-        await Task.CompletedTask;
-
-        inMemBus.Publish(new PurchaseFailedEvent(message.PurchaseId, message.Reason));
+        await inMemBus.PublishAsync(new PurchaseFailedEvent(message.PurchaseId, message.Reason));
 
         CompleteWorkflow();
 
@@ -91,15 +79,6 @@ public class PurchaseWorkflow(ILogger<PurchaseWorkflow> logger, IInMemBus inMemB
         testDataAsserter.Add(message.PurchaseId);
 
         CompleteWorkflow();
-
-        // sw.Stop();
-
-        // logger.LogInformation("Counter is at {n} for {id}", testDataAsserter.GetCounterValue(), message.PurchaseId);
-
-        //if (sw.ElapsedMilliseconds > 500)
-        //{
-        //    logger.LogInformation("Workflow completed in > 500ms. In this case it was {ms}ms", sw.ElapsedMilliseconds);
-        //}
 
         State = $"Handled {message}";
     }

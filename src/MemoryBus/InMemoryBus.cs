@@ -9,32 +9,35 @@ internal class InMemoryBus(ILogger<InMemoryBus> logger, InMemBusConfiguration co
     private readonly ConcurrentBag<Message> receivedMessages = [];
     private readonly ConcurrentBag<Message> processedMessages = [];
 
-    public void Send<TMessage>(TMessage message)
+    public async Task SendAsync<TMessage>(TMessage message)
         where TMessage : class
     {
-        if (configuration.DebugMode)
+        await Task.Run(() =>
         {
-            var id = Guid.NewGuid();
-
-            if (receivedMessages.Any(x => x.Id == id))
+            if (configuration.DebugMode)
             {
-                logger.LogError("Message with the ID {id} has already been received - nothing will happen, this is just for information", id);
+                var id = Guid.NewGuid();
+
+                if (receivedMessages.Any(x => x.Id == id))
+                {
+                    logger.LogError("Message with the ID {id} has already been received - nothing will happen, this is just for information", id);
+                }
+
+                if (processedMessages.Any(x => x.Id == id))
+                {
+                    logger.LogError("Message with the ID {id} has already been processed - nothing will happen, this is just for information", id);
+                }
+
+                receivedMessages.Add(new Message(message).WithId(id));
             }
 
-            if (processedMessages.Any(x => x.Id == id))
-            {
-                logger.LogError("Message with the ID {id} has already been processed - nothing will happen, this is just for information", id);
-            }
-
-            receivedMessages.Add(new Message(message).WithId(id));
-        }
-
-        queue.Enqueue(new Message(message));
+            queue.Enqueue(new Message(message));
+        }).ConfigureAwait(false);
     }
 
-    public void Publish<TEvent>(TEvent @event)
+    public Task PublishAsync<TEvent>(TEvent @event)
         where TEvent : class =>
-        Send(@event);
+        SendAsync(@event);
 
     public IReadOnlyCollection<Message> GetNextMessagesToProcess(int maxMessagesToDequeue)
     {
@@ -56,17 +59,20 @@ internal class InMemoryBus(ILogger<InMemoryBus> logger, InMemBusConfiguration co
         return messagesToProcess;
     }
 
-    public void Requeue(Message message)
+    public async Task RequeueAsync(Message message)
     {
-        message.AddRequeueAttempt();
-
-        if (message.RequeueAttempts > 1000) // arbitrary but will do for now
+        await Task.Run(() =>
         {
-            logger.LogError("Message is poison. Will not requeue");
-            return;
-        }
+            message.AddRequeueAttempt();
 
-        queue.Enqueue(message);
+            if (message.RequeueAttempts > 1000) // arbitrary but will do for now
+            {
+                logger.LogError("Message is poison. Will not requeue");
+                return;
+            }
+
+            queue.Enqueue(message);
+        }).ConfigureAwait(false);
     }
 
     public void AddProcessedMessage(Message message)

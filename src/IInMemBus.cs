@@ -4,9 +4,9 @@ namespace InMemBus;
 
 public interface IInMemBus
 {
-    public void Send<TMessage>(TMessage message) where TMessage : class;
-    public void Publish<TEvent>(TEvent @event) where TEvent : class;
+    public Task SendAsync<TMessage>(TMessage message) where TMessage : class;
+    public Task PublishAsync<TEvent>(TEvent @event) where TEvent : class;
     internal IReadOnlyCollection<Message> GetNextMessagesToProcess(int maxMessagesToDequeue);
-    internal void Requeue(Message message);
+    internal Task RequeueAsync(Message message);
     internal void AddProcessedMessage(Message message);
 }

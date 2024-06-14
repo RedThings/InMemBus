@@ -6,6 +6,6 @@ public class PrepareToShipCommandHandler(IInMemBus inMemBus) : IInMemBusMessageH
     {
         await Delayer.DelayAsync();
 
-        inMemBus.Publish(new ItemShippingPreparedEvent(message.PurchaseId, message.ShippingId, message.Item.PurchasedItemId));
+        await inMemBus.PublishAsync(new ItemShippingPreparedEvent(message.PurchaseId, message.ShippingId, message.Item.PurchasedItemId));
     }
 }

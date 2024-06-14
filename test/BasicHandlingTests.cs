@@ -28,7 +28,7 @@ public class BasicHandlingTests(ITestOutputHelper testOutputHelper) : IDisposabl
         var id = Guid.NewGuid();
 
         // Act
-        inMemBus.Send(new DoSomethingCommand(id));
+        inMemBus.SendAsync(new DoSomethingCommand(id));
 
         // Assert
         Assert.True(testDataAsserter.Poll(t => t.Assert(id)));
@@ -48,7 +48,7 @@ public class BasicHandlingTests(ITestOutputHelper testOutputHelper) : IDisposabl
         var id = Guid.NewGuid();
 
         // Act
-        inMemBus.Publish(new SomethingHappenedEvent(id));
+        inMemBus.PublishAsync(new SomethingHappenedEvent(id));
 
         // Assert
         Assert.True(testDataAsserter.Poll(t => t.AssertMultiple(id, 2)));
@@ -64,14 +64,14 @@ public class BasicHandlingTests(ITestOutputHelper testOutputHelper) : IDisposabl
         const int maxPollingSeconds = 30;
 
         // Act
-        inMemBus.Publish(new ItemsPurchasedEvent(purchaseId));
+        inMemBus.PublishAsync(new ItemsPurchasedEvent(purchaseId));
 
         // Assert (that original workflow completes, and new one cannot be started on step 2)
         Assert.True(testDataAsserter.Poll(t => t.Assert(purchaseId), maxPollingSeconds));
 
         var newPurchaseId = Guid.NewGuid();
 
-        inMemBus.Publish(new PurchasedItemValidationSucceededEvent(newPurchaseId, Guid.NewGuid()));
+        inMemBus.PublishAsync(new PurchasedItemValidationSucceededEvent(newPurchaseId, Guid.NewGuid()));
 
         Assert.False(testDataAsserter.Poll(t => t.Assert(newPurchaseId), maxPollingSeconds));
     }
@@ -87,7 +87,7 @@ public class BasicHandlingTests(ITestOutputHelper testOutputHelper) : IDisposabl
         var testValue = Guid.NewGuid().ToString();
 
         // Act
-        inMemBus.Publish(new ItemsPurchasedEvent(purchaseId, testInstruction, testValue));
+        inMemBus.PublishAsync(new ItemsPurchasedEvent(purchaseId, testInstruction, testValue));
 
         // Assert
         Assert.True(testDataAsserter.Poll(t => t.Assert(testValue)));
